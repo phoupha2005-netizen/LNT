@@ -14,6 +14,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LAO_PROVINCES, PRESET_TEAM_LOGOS } from '../constants/laoData';
+import { 
+  requestPushPermission, 
+  togglePushNotificationPreference, 
+  getPushNotificationStatus, 
+  getDevicePlatform 
+} from '../services/fcmService';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -39,6 +45,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [copiedId, setCopiedId] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Push Notification state
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushStatusMsg, setPushStatusMsg] = useState('');
+  const platform = getDevicePlatform();
+
   useEffect(() => {
     if (userProfile && isOpen) {
       setDisplayName(userProfile.displayName || '');
@@ -50,8 +62,37 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setPhone(userProfile.phone || '');
       setWhatsapp(userProfile.whatsapp || '');
       setHidePhone(Boolean(userProfile.hidePhone));
+
+      if (currentUser) {
+        getPushNotificationStatus(currentUser.uid).then((st) => {
+          setPushEnabled(st.enabled);
+        });
+      }
     }
-  }, [userProfile, isOpen]);
+  }, [userProfile, isOpen, currentUser]);
+
+  const handleTogglePush = async () => {
+    if (!currentUser) return;
+    setPushLoading(true);
+    setPushStatusMsg('');
+
+    if (!pushEnabled) {
+      const res = await requestPushPermission(currentUser.uid, currentUser.email || '');
+      if (res.success) {
+        setPushEnabled(true);
+        setPushStatusMsg('ເປີດຮັບການແຈ້ງເຕືອນສຳເລັດແລ້ວ! ທ່ານຈະໄດ້ຮັບ Push ເມື່ອມີໂພສຫາຄູ່ໃໝ່.');
+      } else {
+        setPushStatusMsg(res.error || 'ບໍ່ສາມາດເປີດການແຈ້ງເຕືອນໄດ້');
+      }
+    } else {
+      const ok = await togglePushNotificationPreference(currentUser.uid, false);
+      if (ok) {
+        setPushEnabled(false);
+        setPushStatusMsg('ປິດການແຈ້ງເຕືອນສຳເລັດແລ້ວ');
+      }
+    }
+    setPushLoading(false);
+  };
 
   if (!isOpen || !currentUser) return null;
 
@@ -298,6 +339,67 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               onChange={(e) => setHidePhone(e.target.checked)}
               className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 bg-neutral-900 border-neutral-700 cursor-pointer"
             />
+          </div>
+
+          {/* FCM Push Notification Settings */}
+          <div className="p-4 bg-gradient-to-r from-neutral-950 to-neutral-900 rounded-2xl border border-neutral-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>Web Push Notification</span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400">
+                      FCM
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-neutral-400">
+                    ແຈ້ງເຕືອນເມື່ອມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່
+                  </p>
+                </div>
+              </div>
+
+              {/* Push Toggle */}
+              <button
+                type="button"
+                onClick={handleTogglePush}
+                disabled={pushLoading}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                  pushEnabled ? 'bg-emerald-500' : 'bg-neutral-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    pushEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {pushStatusMsg && (
+              <p className="text-[11px] text-emerald-400 font-medium bg-emerald-950/40 p-2 rounded-xl border border-emerald-900/40">
+                {pushStatusMsg}
+              </p>
+            )}
+
+            {/* Platform & iOS PWA tip */}
+            <div className="text-[10px] text-neutral-400 bg-neutral-950 p-2.5 rounded-xl border border-neutral-800/80 space-y-1">
+              <p className="flex items-center gap-1.5 text-neutral-300">
+                <span>📱 ອຸປະກອນ: <strong className="text-white capitalize">{platform}</strong></span>
+                <span>•</span>
+                <span>ສະຖານະ: <strong className={pushEnabled ? "text-emerald-400" : "text-neutral-500"}>{pushEnabled ? "ເປີດຮັບແລ້ວ" : "ປິດຢູ່"}</strong></span>
+              </p>
+              {platform === 'ios' && (
+                <p className="text-amber-400/90 leading-relaxed">
+                  💡 ສຳລັບ iPhone/iPad: ກະລຸນາກົດປຸ່ມ Share (ແບ່ງປັນ) ໃນ Safari ແລ້ວເລືອກ <strong>"Add to Home Screen"</strong> (ເພີ່ມໃສ່ໜ້າຈໍໂຮມ) ເພື່ອເປີດໃຊ້ Push Notification ໃນ iOS.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Actions */}

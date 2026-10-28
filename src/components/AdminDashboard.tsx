@@ -11,7 +11,9 @@ import {
   MapPin, 
   Plus, 
   AlertTriangle,
-  Lock
+  Lock,
+  Bell,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -39,12 +41,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const { currentUser, isAdmin } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'posts' | 'reports' | 'users' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'posts' | 'reports' | 'users' | 'settings' | 'push_logs'>('overview');
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [postsList, setPostsList] = useState<FootballPost[]>([]);
   const [reportsList, setReportsList] = useState<UserReport[]>([]);
+  const [pushLogsList, setPushLogsList] = useState<any[]>([]);
+  const [fcmTokensCount, setFcmTokensCount] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [testPushLoading, setTestPushLoading] = useState(false);
+  const [testPushResult, setTestPushResult] = useState('');
 
   // Guard against non-admin
   if (!isAdmin) {
@@ -90,6 +96,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setReportsList(rList);
     });
 
+    // FCM Tokens listener
+    const unsubTokens = onSnapshot(collection(db, 'fcmTokens'), (snap) => {
+      setFcmTokensCount(snap.size);
+    });
+
+    // Push Logs listener
+    const unsubLogs = onSnapshot(collection(db, 'pushLogs'), (snap) => {
+      const logs: any[] = [];
+      snap.forEach(d => logs.push({ id: d.id, ...d.data() }));
+      logs.sort((a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime());
+      setPushLogsList(logs);
+    });
+
     // Matches count
     const fetchMatches = async () => {
       try {
@@ -107,8 +126,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       unsubUsers();
       unsubPosts();
       unsubReports();
+      unsubTokens();
+      unsubLogs();
     };
   }, []);
+
+  const handleSendTestPush = async () => {
+    setTestPushLoading(true);
+    setTestPushResult('');
+    try {
+      if (postsList.length === 0) {
+        setTestPushResult('ບໍ່ມີໂພສສຳລັບທົດສອບ ກະລຸນາສ້າງໂພສກ່ອນ');
+        setTestPushLoading(false);
+        return;
+      }
+      const testPostId = postsList[0].id;
+      const res = await fetch('/api/send-post-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: testPostId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestPushResult(`ສົ່ງ Push ສຳເລັດ! ສົ່ງຫາ ${data.recipientCount} ອຸປະກອນ (${data.successCount} ສຳເລັດ).`);
+      } else if (data.status === 'already_notified') {
+        setTestPushResult('ໂພສນີ້ເຄີຍສົ່ງ Push ແລ້ວ (ລະບົບປ້ອງກັນການສົ່ງຊ້ຳເຮັດວຽກປົກກະຕິ).');
+      } else {
+        setTestPushResult(`ຜົນການສົ່ງ: ${data.message || data.status || 'ສຳເລັດ'}`);
+      }
+    } catch (err: any) {
+      setTestPushResult(`Error: ${err.message}`);
+    } finally {
+      setTestPushLoading(false);
+    }
+  };
 
   // Admin Actions
   const handleDeletePost = async (postId: string) => {
@@ -284,6 +335,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <MapPin className="w-3.5 h-3.5" />
           <span>ຕັ້ງຄ່າແຂວງ</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('push_logs')}
+          className={`px-4 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'push_logs' ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'text-neutral-400 hover:text-white'
+          }`}
+        >
+          <Bell className="w-3.5 h-3.5" />
+          <span>FCM Push ({fcmTokensCount})</span>
         </button>
       </div>
 
@@ -470,6 +530,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div className="p-3 bg-neutral-950 rounded-xl border border-neutral-800 text-xs text-neutral-400">
               * ແຂວງທີ່ເລືອກຈະເປັນຄ່າເລີ່ມຕົ້ນໃຫ້ກັບຜູ້ໃຊ້ໃໝ່ທຸກຄົນ. ປັດຈຸບັນຄື: <span className="text-emerald-400 font-semibold">{currentProvince}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Push Logs Tab */}
+        {activeTab === 'push_logs' && (
+          <div className="space-y-4">
+            {/* FCM Stats Banner */}
+            <div className="p-5 bg-gradient-to-r from-emerald-950/60 to-neutral-900 rounded-2xl border border-emerald-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Bell className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">FCM Web Push Subscribers</h3>
+                  <p className="text-xs text-neutral-400">
+                    ຈຳນວນອຸປະກອນທີ່ລົງທະບຽນຮັບ Push: <strong className="text-emerald-400 text-sm">{fcmTokensCount}</strong> ອຸປະກອນ
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleSendTestPush}
+                  disabled={testPushLoading}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-neutral-950 shadow flex items-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{testPushLoading ? 'ກຳລັງທົດສອບ...' : 'ທົດສອບສົ່ງ Push ຫາທຸກຄົນ'}</span>
+                </button>
+              </div>
+            </div>
+
+            {testPushResult && (
+              <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-emerald-400">
+                {testPushResult}
+              </div>
+            )}
+
+            {/* Push History Logs Table */}
+            <div className="bg-neutral-900 rounded-2xl border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+              <div className="p-4 bg-neutral-950 font-semibold text-xs text-neutral-400 flex items-center justify-between">
+                <span>ປະຫວັດການສົ່ງ Push Notification ({pushLogsList.length})</span>
+                <span className="text-[10px] text-neutral-500">ອັບເດດສົດ Real-time</span>
+              </div>
+
+              {pushLogsList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-neutral-500">
+                  ຍັງບໍ່ມີປະຫວັດການສົ່ງ Push Notification
+                </div>
+              ) : (
+                pushLogsList.map((log) => (
+                  <div key={log.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-white">{log.title}</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400">
+                          {log.successCount} ສຳເລັດ
+                        </span>
+                        {log.failureCount > 0 && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-400">
+                            {log.failureCount} ລົ້ມເຫຼວ
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-neutral-400">
+                        {log.body}
+                      </p>
+                      <p className="text-[10px] text-neutral-500">
+                        ສົ່ງເມື່ອ: {new Date(log.sentAt).toLocaleString('lo-LA')} • ຈຳນວນເປົ້າໝາຍ: {log.recipientCount} ອຸປະກອນ
+                      </p>
+                    </div>
+
+                    <span className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2.5 py-1 rounded-lg border border-neutral-800 shrink-0">
+                      Post ID: {log.postId?.slice(0, 8)}...
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}

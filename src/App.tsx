@@ -13,7 +13,9 @@ import {
   SlidersHorizontal, 
   Sparkles,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Bell,
+  X as CloseIcon
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
@@ -30,6 +32,11 @@ import { NotificationsModal } from './components/NotificationsModal';
 import { MyMatchesView } from './components/MyMatchesView';
 import { AdminDashboard } from './components/AdminDashboard';
 import { FootballPost, AppNotification, MatchRequest } from './types';
+import { 
+  requestPushPermission, 
+  setupForegroundMessageListener, 
+  registerServiceWorker 
+} from './services/fcmService';
 import { 
   DEFAULT_PROVINCE, 
   LAO_PROVINCES, 
@@ -92,6 +99,90 @@ function MainApp() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [targetReport, setTargetReport] = useState<{ type: 'post' | 'user' | 'chat'; id: string; name: string } | null>(null);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
+
+  // FCM Push Notifications State
+  const [incomingPushToast, setIncomingPushToast] = useState<{ title: string; body: string; postId?: string } | null>(null);
+  const [showPushPromptBanner, setShowPushPromptBanner] = useState(false);
+  const [pushActivating, setPushActivating] = useState(false);
+
+  // 1. Register Service Worker on Mount
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
+  // 2. Deep-linking: Open post if URL contains ?postId=XYZ
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const queryPostId = params.get('postId');
+    if (queryPostId && posts.length > 0) {
+      const target = posts.find(p => p.id === queryPostId);
+      if (target) {
+        setSelectedDetailPost(target);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, [posts]);
+
+  // 3. Service Worker message listener (when notification clicked from background)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.postId) {
+        const target = posts.find(p => p.id === event.data.postId);
+        if (target) {
+          setSelectedDetailPost(target);
+        }
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+  }, [posts]);
+
+  // 4. Foreground FCM Message Listener
+  useEffect(() => {
+    let cleanup: any = null;
+    setupForegroundMessageListener((payload) => {
+      setIncomingPushToast({
+        title: payload.title,
+        body: payload.body,
+        postId: payload.postId
+      });
+      setTimeout(() => {
+        setIncomingPushToast(prev => (prev?.postId === payload.postId ? null : prev));
+      }, 7000);
+    }).then(fn => { cleanup = fn; });
+
+    return () => {
+      if (typeof cleanup === 'function') cleanup();
+    };
+  }, []);
+
+  // 5. Prompt banner for unprompted users
+  useEffect(() => {
+    if (currentUser && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default' && !sessionStorage.getItem('lnt_push_prompt_dismissed')) {
+        setShowPushPromptBanner(true);
+      }
+    }
+  }, [currentUser]);
+
+  const handleActivatePushFromBanner = async () => {
+    if (!currentUser) return;
+    setPushActivating(true);
+    const res = await requestPushPermission(currentUser.uid, currentUser.email || '');
+    setPushActivating(false);
+    setShowPushPromptBanner(false);
+    sessionStorage.setItem('lnt_push_prompt_dismissed', 'true');
+    if (res.success) {
+      alert('ເປີດຮັບການແຈ້ງເຕືອນສຳເລັດແລ້ວ! ທ່ານຈະໄດ້ຮັບ Push ເມື່ອມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່.');
+    }
+  };
+
+  const handleDismissPushBanner = () => {
+    setShowPushPromptBanner(false);
+    sessionStorage.setItem('lnt_push_prompt_dismissed', 'true');
+  };
 
   // Load Settings (Default province from Firestore)
   useEffect(() => {
@@ -399,6 +490,76 @@ function MainApp() {
         <div className="bg-red-600 text-white py-2 px-4 text-xs font-bold text-center flex items-center justify-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           <span>ບັນຊີຂອງທ່ານຖືກລະງັບຊົ່ວຄາວ ເນື່ອງຈາກການລະເມີດກົດລະບຽບ. ກະລຸນາຕິດຕໍ່ Admin ເພື່ອກວດສອບ.</span>
+        </div>
+      )}
+
+      {/* Foreground Incoming Push Notification Toast */}
+      {incomingPushToast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm w-full bg-neutral-900 border-2 border-emerald-500 rounded-2xl shadow-2xl p-4 animate-in slide-in-from-top duration-300">
+          <div className="flex items-start space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <Bell className="w-5 h-5 animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-xs text-white truncate">{incomingPushToast.title}</h4>
+                <button
+                  onClick={() => setIncomingPushToast(null)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <CloseIcon className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-neutral-300 mt-1 line-clamp-2">
+                {incomingPushToast.body}
+              </p>
+              {incomingPushToast.postId && (
+                <button
+                  onClick={() => {
+                    const post = posts.find(p => p.id === incomingPushToast.postId);
+                    if (post) setSelectedDetailPost(post);
+                    setIncomingPushToast(null);
+                  }}
+                  className="mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                >
+                  <span>ເບິ່ງລາຍລະອຽດໂພສນີ້ →</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Push Notification Opt-in Prompt Banner */}
+      {showPushPromptBanner && (
+        <div className="bg-gradient-to-r from-emerald-950 via-neutral-900 to-teal-950 border-b border-emerald-800/60 px-4 py-2.5 text-xs text-white flex flex-wrap items-center justify-between gap-2 shadow-lg">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <Bell className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold">ເປີດຮັບ Push Notification?</span>
+              <span className="text-neutral-300 ml-1.5 hidden sm:inline">
+                ຮັບການແຈ້ງເຕືອນທັນທີເມື່ອມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່ໃນແຂວງຂອງທ່ານ
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleActivatePushFromBanner}
+              disabled={pushActivating}
+              className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold transition shadow-sm"
+            >
+              {pushActivating ? 'ກຳລັງເປີດ...' : 'ເປີດຮັບແຈ້ງເຕືອນ'}
+            </button>
+            <button
+              onClick={handleDismissPushBanner}
+              className="p-1 text-neutral-400 hover:text-white rounded-lg"
+            >
+              <CloseIcon className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

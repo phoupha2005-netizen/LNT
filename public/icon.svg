@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background Rounded Rect -->
+  <rect width="512" height="512" rx="112" fill="#0a0a0a" />
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="url(#grad)" opacity="0.12" stroke="#10b981" stroke-width="6" />
+  
+  <!-- Football pitch outline -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#10b981" stroke-width="8" opacity="0.4" />
+  <line x1="96" y1="256" x2="416" y2="256" stroke="#10b981" stroke-width="8" opacity="0.4" />
+
+  <!-- Trophy Emblem -->
+  <g filter="url(#shadow)">
+    <!-- Cup Base & Stem -->
+    <path d="M216 384 h80 v28 h32 v24 H184 v-24 h32 z" fill="#facc15" />
+    <path d="M244 324 h24 v60 h-24 z" fill="#eab308" />
+    
+    <!-- Cup Body -->
+    <path d="M168 144 h176 v88 c0 52 -40 94 -88 94 s-88 -42 -88 -94 v-88 z" fill="#facc15" />
+    <path d="M256 144 h88 v88 c0 52 -40 94 -88 94 z" fill="#eab308" />
+
+    <!-- Handles -->
+    <path d="M168 164 h-32 c-22 0 -40 18 -40 40 s18 40 40 40 h32 v-20 h-32 c-11 0 -20 -9 -20 -20 s9 -20 20 -20 h32 z" fill="#facc15" />
+    <path d="M344 164 h32 c22 0 40 18 40 40 s-18 40 -40 40 h-32 v-20 h32 c11 0 20 -9 20 -20 s-9 -20 -20 -20 h-32 z" fill="#eab308" />
+
+    <!-- Ball in Cup -->
+    <circle cx="256" cy="120" r="36" fill="#ffffff" stroke="#10b981" stroke-width="5" />
+    <polygon points="256,104 270,114 265,130 247,130 242,114" fill="#059669" />
+  </g>
+</svg>

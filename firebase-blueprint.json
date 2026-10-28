@@ -184,6 +184,35 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["currentProvince"]
+    },
+    "FcmToken": {
+      "title": "FcmToken",
+      "description": "FCM device registration token for Web Push Notifications",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "maxLength": 512 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 255 },
+        "deviceType": { "type": "string", "maxLength": 50 },
+        "enabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["token", "userId", "enabled"]
+    },
+    "PushLog": {
+      "title": "PushLog",
+      "description": "Logs of dispatched FCM push notifications to prevent duplicate sends",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "recipientCount": { "type": "number" },
+        "successCount": { "type": "number" },
+        "failureCount": { "type": "number" },
+        "sentAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "title", "sentAt"]
     }
   },
   "firestore": {
@@ -226,6 +255,14 @@
     "/admins/{adminId}": {
       "schema": "UserProfile",
       "description": "Designated admin UIDs"
+    },
+    "/fcmTokens/{tokenId}": {
+      "schema": "FcmToken",
+      "description": "Registered FCM tokens for Web Push"
+    },
+    "/pushLogs/{logId}": {
+      "schema": "PushLog",
+      "description": "Push notification dispatch logs"
     }
   }
 }

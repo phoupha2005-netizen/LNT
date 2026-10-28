@@ -192,6 +192,14 @@ export const CreateEditPostModal: React.FC<CreateEditPostModalProps> = ({
         };
 
         const docRef = await addDoc(collection(db, 'posts'), newPost);
+
+        // Trigger Server Push Notification via Firebase Admin SDK
+        fetch('/api/send-post-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postId: docRef.id })
+        }).catch(err => console.warn('Background push notification trigger:', err));
+
         onSuccess({ id: docRef.id, ...newPost });
         onClose();
       }

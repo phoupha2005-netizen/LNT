@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "LNT Football Connect",
+  "short_name": "LNT Football",
+  "description": "ແພລດຟອມສຳລັບນັດເຕະບານພາຍໃນແຂວງ ໃນປະເທດລາວ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#10b981",
+  "categories": ["sports", "social"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -43,6 +43,8 @@ export interface FootballPost {
   status: MatchStatus;
   opponentId?: string;
   opponentTeamName?: string;
+  pushNotified?: boolean;
+  pushNotifiedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -150,4 +152,26 @@ export interface SystemSetting {
   currentProvince: string;
   supportedProvinces: string[];
   updatedAt: string;
+}
+
+export interface FcmToken {
+  id?: string;
+  token: string;
+  userId: string;
+  userEmail?: string;
+  deviceType?: 'mobile' | 'desktop' | 'ios' | 'android' | 'pwa' | 'unknown';
+  userAgent?: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PushLog {
+  id?: string;
+  postId: string;
+  title: string;
+  recipientCount: number;
+  successCount: number;
+  failureCount: number;
+  sentAt: string;
 }
