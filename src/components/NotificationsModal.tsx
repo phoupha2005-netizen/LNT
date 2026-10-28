@@ -75,6 +75,41 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
           </button>
         </div>
 
+        {/* Mobile Push Status & Toggle Bar */}
+        <div className="px-6 py-3 bg-neutral-950/80 border-b border-neutral-800/80 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${
+              typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                ? 'bg-emerald-400 animate-pulse'
+                : 'bg-amber-400'
+            }`} />
+            <span className="text-neutral-300">
+              Push ໜ້າຈໍໂທລະສັບ:
+              <strong className="ml-1 text-white">
+                {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                  ? 'ເປີດໃຊ້ງານແລ້ວ'
+                  : 'ຍັງບໍ່ໄດ້ເປີດ'}
+              </strong>
+            </span>
+          </div>
+
+          {typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
+            <button
+              onClick={async () => {
+                if ('Notification' in window) {
+                  const perm = await Notification.requestPermission();
+                  if (perm === 'granted') {
+                    window.location.reload();
+                  }
+                }
+              }}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500 hover:bg-emerald-400 text-neutral-950 transition"
+            >
+              ເປີດຮັບ Push
+            </button>
+          )}
+        </div>
+
         {/* Notification items */}
         <div className="p-4 space-y-2.5 overflow-y-auto flex-1 divide-y divide-neutral-800/40">
           {notifications.length === 0 ? (

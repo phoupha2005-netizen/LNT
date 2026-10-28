@@ -10,7 +10,8 @@ import {
   MapPin, 
   CalendarDays,
   Menu,
-  X
+  X,
+  Smartphone
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LAO_PROVINCES } from '../constants/laoData';
@@ -24,6 +25,7 @@ interface NavbarProps {
   onOpenChat: () => void;
   onOpenNotifications: () => void;
   onOpenAdmin: () => void;
+  onOpenInstallPush: () => void;
   onNavigateHome: () => void;
   onNavigateMyMatches: () => void;
   activeView: 'home' | 'my-matches' | 'admin';
@@ -41,6 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenChat,
   onOpenNotifications,
   onOpenAdmin,
+  onOpenInstallPush,
   onNavigateHome,
   onNavigateMyMatches,
   activeView,
@@ -138,6 +141,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Actions & User Profile */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Phone Push / PWA Quick button */}
+            <button
+              onClick={onOpenInstallPush}
+              title="Push Notification ໜ້າຈໍໂທລະສັບ"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-xs text-neutral-300 hover:text-white transition cursor-pointer"
+            >
+              <Smartphone className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline font-medium">ແຈ້ງເຕືອນໜ້າຈໍ</span>
+            </button>
+
             {/* Create Post Button */}
             <button
               onClick={onOpenCreatePost}

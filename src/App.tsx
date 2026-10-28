@@ -29,6 +29,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { ReportModal } from './components/ReportModal';
 import { NotificationsModal } from './components/NotificationsModal';
+import { InstallPushModal } from './components/InstallPushModal';
 import { MyMatchesView } from './components/MyMatchesView';
 import { AdminDashboard } from './components/AdminDashboard';
 import { FootballPost, AppNotification, MatchRequest } from './types';
@@ -55,6 +56,7 @@ import {
   deleteDoc, 
   addDoc, 
   getDocs,
+  getDoc,
   setDoc
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
@@ -99,6 +101,7 @@ function MainApp() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [targetReport, setTargetReport] = useState<{ type: 'post' | 'user' | 'chat'; id: string; name: string } | null>(null);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
+  const [installPushModalOpen, setInstallPushModalOpen] = useState(false);
 
   // FCM Push Notifications State
   const [incomingPushToast, setIncomingPushToast] = useState<{ title: string; body: string; postId?: string } | null>(null);
@@ -115,12 +118,23 @@ function MainApp() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const queryPostId = params.get('postId');
-    if (queryPostId && posts.length > 0) {
-      const target = posts.find(p => p.id === queryPostId);
-      if (target) {
-        setSelectedDetailPost(target);
-        window.history.replaceState({}, '', window.location.pathname);
-      }
+    if (!queryPostId) return;
+
+    const openTarget = (post: FootballPost) => {
+      setSelectedDetailPost(post);
+      window.history.replaceState({}, '', window.location.pathname);
+    };
+
+    const target = posts.find(p => p.id === queryPostId);
+    if (target) {
+      openTarget(target);
+    } else {
+      // Direct Firestore fetch so notification click works across filters & provinces
+      getDoc(doc(db, 'posts', queryPostId)).then((snap) => {
+        if (snap.exists()) {
+          openTarget({ id: snap.id, ...snap.data() } as FootballPost);
+        }
+      }).catch(err => console.warn('Deep link post fetch notice:', err));
     }
   }, [posts]);
 
@@ -129,9 +143,16 @@ function MainApp() {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
     const handleSwMessage = (event: MessageEvent) => {
       if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.postId) {
-        const target = posts.find(p => p.id === event.data.postId);
+        const queryPostId = event.data.postId;
+        const target = posts.find(p => p.id === queryPostId);
         if (target) {
           setSelectedDetailPost(target);
+        } else {
+          getDoc(doc(db, 'posts', queryPostId)).then((snap) => {
+            if (snap.exists()) {
+              setSelectedDetailPost({ id: snap.id, ...snap.data() } as FootballPost);
+            }
+          }).catch(err => console.warn('SW message post fetch notice:', err));
         }
       }
     };
@@ -578,6 +599,7 @@ function MainApp() {
           setChatModalOpen(true);
         }}
         onOpenNotifications={() => setNotificationsModalOpen(true)}
+        onOpenInstallPush={() => setInstallPushModalOpen(true)}
         onOpenAdmin={() => setActiveView('admin')}
         onNavigateHome={() => setActiveView('home')}
         onNavigateMyMatches={() => {
@@ -943,6 +965,11 @@ function MainApp() {
             setActiveView('my-matches');
           }
         }}
+      />
+
+      <InstallPushModal
+        isOpen={installPushModalOpen}
+        onClose={() => setInstallPushModalOpen(false)}
       />
 
     </div>
