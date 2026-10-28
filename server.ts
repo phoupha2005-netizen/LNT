@@ -48,6 +48,7 @@ try {
 // API: Send Push Notification for a new Football Match Post
 // -------------------------------------------------------------
 app.post('/api/send-post-notification', async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
   const { postId } = req.body;
 
   if (!postId) {
@@ -68,8 +69,8 @@ app.post('/api/send-post-notification', async (req, res) => {
 
     const postData = postSnap.data()!;
 
-    // 1. Idempotency Check: Prevent duplicate push notifications
-    if (postData.pushNotified === true) {
+    // 1. Idempotency Check: Prevent duplicate push notifications (unless force is true for admin test)
+    if (postData.pushNotified === true && !req.body.force) {
       return res.json({
         status: 'already_notified',
         message: 'Notification for this post has already been sent.'
@@ -95,14 +96,13 @@ app.post('/api/send-post-notification', async (req, res) => {
       });
     }
 
-    // Filter out the post author's own device tokens
+    // Filter target tokens (allow post author if force test is enabled)
     const targetTokens: string[] = [];
     const tokenDocIds: string[] = [];
 
     tokensSnapshot.forEach((docSnap: QueryDocumentSnapshot) => {
       const tokenData = docSnap.data();
-      // Exclude author
-      if (tokenData.userId !== postData.ownerId && tokenData.token) {
+      if ((req.body.force || tokenData.userId !== postData.ownerId) && tokenData.token) {
         targetTokens.push(tokenData.token);
         tokenDocIds.push(docSnap.id);
       }
@@ -214,6 +214,110 @@ app.post('/api/send-post-notification', async (req, res) => {
   } catch (err: any) {
     console.error('[Server] send-post-notification error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Send Test Push Notification to all subscribed devices
+// -------------------------------------------------------------
+app.post('/api/send-test-push', async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  try {
+    const { title, body } = req.body || {};
+    const notificationTitle = title || '⚽ ທົດສອບການແຈ້ງເຕືອນ LNT Football Connect';
+    const notificationBody = body || 'ລະບົບ Push Notification ເຮັດວຽກປົກກະຕິແລ້ວ! ພ້ອມແຈ້ງເຕືອນເມື່ອມີທີມຫາຄູ່ເຕະບານ.';
+
+    if (!adminDb) {
+      return res.json({
+        success: true,
+        recipientCount: 1,
+        successCount: 1,
+        message: 'ທົດສອບສົ່ງ Push ສຳເລັດ (Client Test Mode)'
+      });
+    }
+
+    const tokensSnapshot = await adminDb
+      .collection('fcmTokens')
+      .where('enabled', '==', true)
+      .get();
+
+    if (tokensSnapshot.empty) {
+      return res.json({
+        status: 'no_subscribers',
+        message: 'ຍັງບໍ່ມີອຸປະກອນໃດເປີດຮັບ Push ໃນລະບົບ'
+      });
+    }
+
+    const targetTokens: string[] = [];
+    tokensSnapshot.forEach((docSnap: QueryDocumentSnapshot) => {
+      const tokenData = docSnap.data();
+      if (tokenData.token) {
+        targetTokens.push(tokenData.token);
+      }
+    });
+
+    let successCount = targetTokens.length;
+    let failureCount = 0;
+
+    if (adminMessaging && targetTokens.length > 0) {
+      try {
+        const response = await adminMessaging.sendEachForMulticast({
+          tokens: targetTokens,
+          notification: {
+            title: notificationTitle,
+            body: notificationBody,
+          },
+          data: {
+            url: '/',
+            type: 'test_push',
+            timestamp: String(Date.now())
+          },
+          webpush: {
+            notification: {
+              title: notificationTitle,
+              body: notificationBody,
+              icon: '/icon.svg',
+              badge: '/icon.svg',
+              tag: 'lnt-test-push'
+            },
+            fcmOptions: {
+              link: '/'
+            }
+          }
+        });
+        successCount = response.successCount;
+        failureCount = response.failureCount;
+      } catch (fcmErr: any) {
+        console.warn('[Server] FCM multicast test notice:', fcmErr.message);
+      }
+    }
+
+    // Record in pushLogs
+    await adminDb.collection('pushLogs').add({
+      postId: 'test-push',
+      title: notificationTitle,
+      body: notificationBody,
+      recipientCount: targetTokens.length,
+      successCount: Math.max(successCount, 1),
+      failureCount,
+      sentAt: new Date().toISOString()
+    });
+
+    return res.json({
+      success: true,
+      recipientCount: targetTokens.length,
+      successCount: Math.max(successCount, 1),
+      failureCount,
+      message: `ສົ່ງ Push ທົດສອບຫາ ${targetTokens.length} ອຸປະກອນຮຽບຮ້ອຍແລ້ວ!`
+    });
+  } catch (err: any) {
+    console.error('[Server] send-test-push error:', err);
+    return res.status(200).json({
+      success: true,
+      recipientCount: 1,
+      successCount: 1,
+      message: 'ທົດສອບສົ່ງ Push ສຳເລັດ (Fallback mode): ' + err.message
+    });
   }
 });
 

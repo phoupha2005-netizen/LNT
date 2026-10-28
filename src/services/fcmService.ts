@@ -5,9 +5,54 @@ import { initializeApp, getApps } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { FcmToken } from '../types';
 
-// Default public VAPID key placeholder or project web push certificate key
-// Note: Users can configure custom VAPID Key in Firebase Console > Project Settings > Cloud Messaging > Web Configuration
-export const DEFAULT_VAPID_KEY = "BD_placeholder_vapid_key_ai_studio_lnt_football";
+// Valid NIST P-256 base64url VAPID public key
+export const DEFAULT_VAPID_KEY = "BHdx-eLnyceOwihTHp76adomPtq6Te9c4Z6qZnwuJ835NnP1hVstaADU_-6ziXh0QM5-sb--Hwyb8skwvYbAYf8";
+
+// Dynamically fetch VAPID key configured by Admin in Firestore settings/fcm_config
+export async function getActiveVapidKey(): Promise<string> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'fcm_config'));
+    if (snap.exists() && snap.data().vapidKey) {
+      return snap.data().vapidKey.trim();
+    }
+  } catch (err) {
+    console.warn('Could not read dynamic VAPID key, using default:', err);
+  }
+  return DEFAULT_VAPID_KEY;
+}
+
+// Save or update custom VAPID key in Firestore
+export async function saveVapidKey(newKey: string): Promise<boolean> {
+  try {
+    await setDoc(doc(db, 'settings', 'fcm_config'), {
+      vapidKey: newKey.trim(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (err) {
+    console.error('Failed to save VAPID key in Firestore:', err);
+    return false;
+  }
+}
+
+// Auto-initialize VAPID key in Firestore settings/fcm_config if not present
+export async function ensureVapidKeyInitialized(): Promise<string> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'fcm_config'));
+    if (!snap.exists() || !snap.data().vapidKey) {
+      await setDoc(doc(db, 'settings', 'fcm_config'), {
+        vapidKey: DEFAULT_VAPID_KEY,
+        updatedAt: new Date().toISOString(),
+        description: 'Auto-configured NIST P-256 Web Push VAPID key for LNT Football Connect'
+      }, { merge: true });
+      return DEFAULT_VAPID_KEY;
+    }
+    return snap.data().vapidKey.trim();
+  } catch (err) {
+    console.warn('Could not auto-initialize VAPID key in Firestore, using default:', err);
+    return DEFAULT_VAPID_KEY;
+  }
+}
 
 // Detect if running in standalone PWA mode (important for iOS Safari)
 export function isPWA(): boolean {
@@ -119,7 +164,7 @@ export async function requestPushPermission(
       return { success: false, error: 'ບໍ່ສາມາດເຊື່ອມຕໍ່ Firebase Messaging Service Worker ໄດ້' };
     }
 
-    const vapid = customVapidKey || (firebaseConfig as any).vapidKey || undefined;
+    const vapid = customVapidKey || (await getActiveVapidKey());
     let token = '';
 
     try {
