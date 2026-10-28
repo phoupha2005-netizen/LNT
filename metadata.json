@@ -1,0 +1,6 @@
+{
+  "name": "LNT Football Connect",
+  "description": "ແພລດຟອມສຳລັບນັດເຕະບານພາຍໃນແຂວງ ໃນປະເທດລາວ - ສ້າງທີມ, ໂພສຫາຄູ່ແຂ່ງ, ຄົ້ນຫາທີມ ແລະ ແຊັດຕິດຕໍ່ກັນ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

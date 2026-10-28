@@ -1,0 +1,231 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information for football community members",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 255 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 2048 },
+        "teamName": { "type": "string", "maxLength": 100 },
+        "province": { "type": "string", "maxLength": 100 },
+        "district": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "whatsapp": { "type": "string", "maxLength": 30 },
+        "hidePhone": { "type": "boolean" },
+        "isAdmin": { "type": "boolean" },
+        "isSuspended": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName"]
+    },
+    "FootballPost": {
+      "title": "FootballPost",
+      "description": "Post seeking football opponent teams within province",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "ownerName": { "type": "string", "maxLength": 100 },
+        "ownerPhotoURL": { "type": "string", "maxLength": 2048 },
+        "title": { "type": "string", "maxLength": 150 },
+        "teamName": { "type": "string", "maxLength": 100 },
+        "teamLogo": { "type": "string", "maxLength": 2048 },
+        "matchType": { "type": "string", "enum": ["5", "7", "11"] },
+        "matchDate": { "type": "string", "maxLength": 20 },
+        "matchTime": { "type": "string", "maxLength": 20 },
+        "pitchName": { "type": "string", "maxLength": 100 },
+        "province": { "type": "string", "maxLength": 100 },
+        "district": { "type": "string", "maxLength": 100 },
+        "skillLevel": { "type": "string", "maxLength": 50 },
+        "pitchFee": { "type": "string", "maxLength": 100 },
+        "feeType": { "type": "string", "maxLength": 50 },
+        "details": { "type": "string", "maxLength": 2000 },
+        "contactPhone": { "type": "string", "maxLength": 50 },
+        "contactWhatsapp": { "type": "string", "maxLength": 50 },
+        "hidePhone": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["open", "confirmed", "completed", "cancelled"] },
+        "opponentId": { "type": "string", "maxLength": 128 },
+        "opponentTeamName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title", "teamName", "matchType", "matchDate", "matchTime", "pitchName", "province", "district", "status"]
+    },
+    "MatchRequest": {
+      "title": "MatchRequest",
+      "description": "Challenge or match request sent from Team B to post owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "postId": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "requesterId": { "type": "string", "maxLength": 128 },
+        "requesterName": { "type": "string", "maxLength": 100 },
+        "requesterPhotoURL": { "type": "string", "maxLength": 2048 },
+        "requesterTeamName": { "type": "string", "maxLength": 100 },
+        "requesterPhone": { "type": "string", "maxLength": 50 },
+        "requesterWhatsapp": { "type": "string", "maxLength": 50 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "ownerId", "requesterId", "requesterTeamName", "status"]
+    },
+    "MatchRecord": {
+      "title": "MatchRecord",
+      "description": "Confirmed match appointment between two teams",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "postId": { "type": "string", "maxLength": 128 },
+        "hostTeamId": { "type": "string", "maxLength": 128 },
+        "hostTeamName": { "type": "string", "maxLength": 100 },
+        "hostTeamLogo": { "type": "string", "maxLength": 2048 },
+        "hostContact": { "type": "string", "maxLength": 100 },
+        "challengerTeamId": { "type": "string", "maxLength": 128 },
+        "challengerTeamName": { "type": "string", "maxLength": 100 },
+        "challengerTeamLogo": { "type": "string", "maxLength": 2048 },
+        "challengerContact": { "type": "string", "maxLength": 100 },
+        "matchDate": { "type": "string", "maxLength": 20 },
+        "matchTime": { "type": "string", "maxLength": 20 },
+        "pitchName": { "type": "string", "maxLength": 100 },
+        "province": { "type": "string", "maxLength": 100 },
+        "district": { "type": "string", "maxLength": 100 },
+        "matchType": { "type": "string", "maxLength": 10 },
+        "status": { "type": "string", "enum": ["confirmed", "completed", "cancelled"] },
+        "scoreHost": { "type": "number" },
+        "scoreChallenger": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "hostTeamId", "challengerTeamId", "matchDate", "matchTime", "pitchName", "status"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Private chat conversation between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "participantIds": { "type": "string", "description": "Array of 2 user IDs" },
+        "participantNames": { "type": "string", "description": "Map of user names" },
+        "participantPhotos": { "type": "string", "description": "Map of user photos" },
+        "lastMessage": { "type": "string", "maxLength": 1000 },
+        "lastSenderId": { "type": "string", "maxLength": 128 },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message inside a private conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderPhoto": { "type": "string", "maxLength": 2048 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversationId", "senderId", "text"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "In-app notifications for matches, requests and chats",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "recipientId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 150 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "link": { "type": "string", "maxLength": 500 },
+        "type": { "type": "string", "enum": ["request_received", "request_accepted", "request_rejected", "chat_message", "match_update"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "title", "message", "type"]
+    },
+    "UserReport": {
+      "title": "UserReport",
+      "description": "Reports against malicious posts or users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "reporterId": { "type": "string", "maxLength": 128 },
+        "reporterName": { "type": "string", "maxLength": 100 },
+        "targetType": { "type": "string", "enum": ["post", "user", "chat"] },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "reason": { "type": "string", "maxLength": 200 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "dismissed", "action_taken"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterId", "targetType", "targetId", "reason", "status"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Platform settings including supported provinces and defaults",
+      "type": "object",
+      "properties": {
+        "currentProvince": { "type": "string", "maxLength": 100 },
+        "supportedProvinces": { "type": "string", "description": "Array of supported Lao provinces" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["currentProvince"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles with contact and team info"
+    },
+    "/posts/{postId}": {
+      "schema": "FootballPost",
+      "description": "Match seeking posts created by teams"
+    },
+    "/matchRequests/{requestId}": {
+      "schema": "MatchRequest",
+      "description": "Match challenge requests"
+    },
+    "/matches/{matchId}": {
+      "schema": "MatchRecord",
+      "description": "Confirmed match fixtures and schedules"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "1-on-1 private chat threads"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages inside conversation thread"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "AppNotification",
+      "description": "User in-app notifications"
+    },
+    "/reports/{reportId}": {
+      "schema": "UserReport",
+      "description": "Abuse and violation reports"
+    },
+    "/settings/{settingId}": {
+      "schema": "SystemSetting",
+      "description": "App settings managed by admin"
+    },
+    "/admins/{adminId}": {
+      "schema": "UserProfile",
+      "description": "Designated admin UIDs"
+    }
+  }
+}
