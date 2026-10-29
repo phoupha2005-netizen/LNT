@@ -196,7 +196,10 @@ function MainApp() {
     setShowPushPromptBanner(false);
     sessionStorage.setItem('lnt_push_prompt_dismissed', 'true');
     if (res.success) {
-      alert('ເປີດຮັບການແຈ້ງເຕືອນສຳເລັດແລ້ວ! ທ່ານຈະໄດ້ຮັບ Push ເມື່ອມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່.');
+      setIncomingPushToast({
+        title: '✅ ເປີດຮັບການແຈ້ງເຕືອນສຳເລັດແລ້ວ!',
+        body: 'ອຸປະກອນຂອງທ່ານຈະໄດ້ຮັບການແຈ້ງເຕືອນໜ້າຈໍທຸກຄັ້ງທີ່ມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່.'
+      });
     }
   };
 
@@ -339,11 +342,48 @@ function MainApp() {
       collection(db, 'notifications'),
       where('recipientId', '==', currentUser.uid)
     );
+    let isInitialNotifLoad = true;
     const unsubNotif = onSnapshot(notifQuery, (snapshot) => {
       const list: AppNotification[] = [];
       snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AppNotification));
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotifications(list);
+
+      // When a new notification arrives in real-time
+      if (!isInitialNotifLoad) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const nData = change.doc.data() as AppNotification;
+            if (!nData.read) {
+              setIncomingPushToast({
+                title: nData.title,
+                body: nData.body || nData.message || '',
+                postId: nData.data?.postId
+              });
+
+              // Also display native notification if permission granted
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.ready.then((reg) => {
+                    reg.showNotification(nData.title, {
+                      body: nData.body,
+                      icon: '/icon.svg',
+                      badge: '/icon.svg',
+                      tag: `notif-${change.doc.id}`,
+                      data: {
+                        url: nData.data?.postId ? `/?postId=${nData.data.postId}` : '/',
+                        postId: nData.data?.postId
+                      },
+                      vibrate: [200, 100, 200]
+                    } as any);
+                  }).catch(e => console.warn('SW showNotification error:', e));
+                }
+              }
+            }
+          }
+        });
+      }
+      isInitialNotifLoad = false;
     });
 
     // My incoming pending requests count

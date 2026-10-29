@@ -126,10 +126,13 @@ export interface AppNotification {
   recipientId: string;
   senderId?: string;
   senderName?: string;
+  senderPhotoURL?: string;
   title: string;
-  message: string;
+  message?: string;
+  body?: string;
   link?: string;
-  type: 'request_received' | 'request_accepted' | 'request_rejected' | 'chat_message' | 'match_update';
+  data?: any;
+  type: 'request_received' | 'request_accepted' | 'request_rejected' | 'chat_message' | 'match_update' | 'match_post';
   read: boolean;
   createdAt: string;
 }

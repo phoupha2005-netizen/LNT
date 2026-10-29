@@ -31,12 +31,15 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
     if (!notif.read) {
       await markNotificationAsRead(notif.id);
     }
-    onNavigateTo(notif.link, notif.type);
+    const targetLink = notif.data?.postId ? `/?postId=${notif.data.postId}` : (notif.link || '/');
+    onNavigateTo(targetLink, notif.type);
     onClose();
   };
 
   const getIcon = (type: string) => {
     switch (type) {
+      case 'match_post':
+        return <Bell className="w-4 h-4 text-emerald-400" />;
       case 'request_received':
         return <Swords className="w-4 h-4 text-amber-400" />;
       case 'request_accepted':
@@ -138,7 +141,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                     )}
                   </div>
                   <p className="text-xs text-neutral-300 mt-0.5 line-clamp-2">
-                    {notif.message}
+                    {notif.body || notif.message}
                   </p>
                   <span className="text-[10px] text-neutral-500 mt-1 block">
                     {new Date(notif.createdAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}

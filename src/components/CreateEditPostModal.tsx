@@ -193,17 +193,46 @@ export const CreateEditPostModal: React.FC<CreateEditPostModalProps> = ({
 
         const docRef = await addDoc(collection(db, 'posts'), newPost);
 
-        // Trigger Server Push Notification via Firebase Admin SDK
+        // 1. Collect target subscriber devices and create in-app notifications
         try {
           const tokensSnap = await getDocs(query(collection(db, 'fcmTokens'), where('enabled', '==', true)));
           const targetTokens: string[] = [];
+          const targetUserIds = new Set<string>();
+
           tokensSnap.forEach((tDoc) => {
             const tData = tDoc.data();
-            if (tData.userId !== currentUser.uid && tData.token) {
-              targetTokens.push(tData.token);
+            if (tData.userId && tData.userId !== currentUser.uid) {
+              targetUserIds.add(tData.userId);
+              if (tData.token) {
+                targetTokens.push(tData.token);
+              }
             }
           });
 
+          // Dispatch in-app notifications to all recipient subscribers
+          targetUserIds.forEach((recipientId) => {
+            addDoc(collection(db, 'notifications'), {
+              recipientId,
+              senderId: currentUser.uid,
+              senderName: newPost.ownerName,
+              senderPhotoURL: newPost.ownerPhotoURL,
+              type: 'match_post',
+              title: `⚽ ຫາຄູ່ເຕະບານໃໝ່: ${newPost.teamName}`,
+              body: `ວັນທີ ${newPost.matchDate} (${newPost.matchTime} ໂມງ) ທີ່ ${newPost.pitchName} (${newPost.province}) • ບານ ${newPost.matchType} ຄົນ`,
+              data: {
+                postId: docRef.id,
+                teamName: newPost.teamName,
+                matchDate: newPost.matchDate,
+                matchTime: newPost.matchTime,
+                pitchName: newPost.pitchName,
+                province: newPost.province
+              },
+              read: false,
+              createdAt: new Date().toISOString()
+            }).catch(e => console.warn('In-app notification dispatch notice:', e));
+          });
+
+          // Trigger Server Push Notification via Firebase Admin SDK
           fetch('/api/send-post-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -214,10 +243,11 @@ export const CreateEditPostModal: React.FC<CreateEditPostModalProps> = ({
             })
           }).catch(err => console.warn('Background push notification trigger:', err));
         } catch (pushErr) {
+          console.warn('Notification collection query notice:', pushErr);
           fetch('/api/send-post-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId: docRef.id })
+            body: JSON.stringify({ postId: docRef.id, postData: newPost })
           }).catch(err => console.warn('Background push notification trigger:', err));
         }
 

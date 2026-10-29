@@ -19,7 +19,9 @@ import {
   ExternalLink,
   RefreshCw,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  Smartphone,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -32,7 +34,7 @@ import {
   addDoc
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { FootballPost, UserProfile, UserReport } from '../types';
+import { FootballPost, UserProfile, UserReport, FcmToken } from '../types';
 import { LAO_PROVINCES } from '../constants/laoData';
 import { DEFAULT_VAPID_KEY, getActiveVapidKey, saveVapidKey, ensureVapidKeyInitialized } from '../services/fcmService';
 
@@ -56,6 +58,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [pushLogsList, setPushLogsList] = useState<any[]>([]);
   const [fcmTokensCount, setFcmTokensCount] = useState(0);
   const [fcmTokensList, setFcmTokensList] = useState<string[]>([]);
+  const [fcmTokensDocs, setFcmTokensDocs] = useState<FcmToken[]>([]);
   const [matchCount, setMatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [testPushLoading, setTestPushLoading] = useState(false);
@@ -116,14 +119,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     // FCM Tokens listener
     const unsubTokens = onSnapshot(collection(db, 'fcmTokens'), (snap) => {
       const tokens: string[] = [];
+      const docs: FcmToken[] = [];
       snap.forEach(d => {
-        const dData = d.data();
+        const dData = d.data() as FcmToken;
+        docs.push({ id: d.id, ...dData });
         if (dData.enabled !== false && dData.token) {
           tokens.push(dData.token);
         }
       });
       setFcmTokensCount(snap.size);
       setFcmTokensList(tokens);
+      setFcmTokensDocs(docs);
     });
 
     // Push Logs listener
@@ -299,6 +305,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setTestPushResult(`✅ ສົ່ງ Push ທົດສອບສຳເລັດ! (${details.join(' • ')})`);
     } catch (err: any) {
       setTestPushResult(`✅ ສົ່ງ Push ທົດສອບສຳເລັດແລ້ວ (ບັນທຶກປະຫວັດໃນລະບົບຮຽບຮ້ອຍ)`);
+    } finally {
+      setTestPushLoading(false);
+    }
+  };
+
+  const handleSendSinglePush = async (tokenItem: FcmToken) => {
+    try {
+      setTestPushLoading(true);
+      const res = await fetch('/api/send-test-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: '⚽ ທົດສອບ Push ເທິງອຸປະກອນນີ້',
+          body: `ທົດສອບສົ່ງ Push ຫາ ${tokenItem.userEmail || tokenItem.deviceType || 'ໂທລະສັບ'} ຮຽບຮ້ອຍແລ້ວ!`,
+          tokens: [tokenItem.token]
+        })
+      });
+      const raw = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(raw); } catch {}
+      if (res.ok && data?.success) {
+        setTestPushResult(`✅ ສົ່ງ Push ທົດສອບຫາອຸປະກອນ (${tokenItem.deviceType || 'mobile'}) ສຳເລັດແລ້ວ!`);
+      } else {
+        setTestPushResult(`⚠️ ສົ່ງແລ້ວ (Result: ${data?.message || 'Done'})`);
+      }
+    } catch (e: any) {
+      setTestPushResult(`Error: ${e.message}`);
     } finally {
       setTestPushLoading(false);
     }
@@ -838,6 +871,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {testPushResult}
               </div>
             )}
+
+            {/* Registered Subscriber Devices Table */}
+            <div className="bg-neutral-900 rounded-2xl border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+              <div className="p-4 bg-neutral-950 font-semibold text-xs text-neutral-400 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
+                  <span>ລາຍຊື່ອຸປະກອນທີ່ລົງທະບຽນຮັບ Push ({fcmTokensDocs.length})</span>
+                </div>
+                <span className="text-[10px] text-neutral-500">ອັບເດດ Real-time ຈາກ Firestore</span>
+              </div>
+
+              {/* Helpful instructions if less than 2 devices */}
+              {fcmTokensDocs.length < 2 && (
+                <div className="p-4 bg-neutral-950/60 text-xs text-neutral-300 space-y-2 border-b border-neutral-800/80">
+                  <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>ວິທີທົດສອບແຈ້ງເຕືອນຫາໂທລະສັບໜ່ວຍອື່ນ:</span>
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-neutral-400 text-[11px] pl-1 leading-relaxed">
+                    <li>ເປີດເວັບໄຊ <code className="text-emerald-400 font-mono">LNT Football Connect</code> ເທິງໂທລະສັບໜ່ວຍທີ 2.</li>
+                    <li>ເຂົ້າສູ່ລະບົບ (ຫຼື ສະໝັກບັນຊີອື່ນ) ເທິງໂທລະສັບໜ່ວຍທີ 2.</li>
+                    <li>ກົດປຸ່ມ <strong className="text-white">"ແຈ້ງເຕືອນໜ້າຈໍ"</strong> (ຫຼື ປຸ່ມ <strong className="text-emerald-400">"ເປີດຮັບແຈ້ງເຕືອນ"</strong> ທີ່ແຖບເທິງ) ແລ້ວກົດ <strong className="text-white">"Allow" (ອະນຸຍາດ)</strong>.</li>
+                    <li>ເມື່ອລົງທະບຽນແລ້ວ, ໂທລະສັບໜ່ວຍທີ 2 ຈະຂຶ້ນໃນຕາຕະລາງດ້ານລຸ່ມນີ້ທັນທີ!</li>
+                    <li>ຈາກນັ້ນ ໃຊ້ໂທລະສັບໜ່ວຍທີ 1 ໂພສຫາຄູ່ເຕະບານໃໝ່, ໂທລະສັບໜ່ວຍທີ 2 ຈະໄດ້ຮັບ Push Notification ທັນທີ.</li>
+                  </ol>
+                </div>
+              )}
+
+              {fcmTokensDocs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-neutral-500">
+                  ຍັງບໍ່ມີອຸປະກອນໃດລົງທະບຽນຮັບ Push Notification
+                </div>
+              ) : (
+                fcmTokensDocs.map((tok, idx) => (
+                  <div key={tok.id || idx} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-white capitalize flex items-center gap-1.5">
+                          {tok.deviceType === 'ios' ? '🍏 iPhone (iOS)' : tok.deviceType === 'android' ? '📱 Android Phone' : '💻 Computer / Web'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          tok.enabled !== false ? 'bg-emerald-500/20 text-emerald-400' : 'bg-neutral-800 text-neutral-400'
+                        }`}>
+                          {tok.enabled !== false ? 'Active' : 'Disabled'}
+                        </span>
+                        {tok.userId === currentUser?.uid && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-400">
+                            ອຸປະກອນຂອງທ່ານ (ເຄື່ອງນີ້)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-neutral-400 text-[11px]">
+                        ບັນຊີ: <span className="text-neutral-200">{tok.userEmail || tok.userId}</span> • ລົງທະບຽນ: {tok.createdAt ? new Date(tok.createdAt).toLocaleString('lo-LA') : 'ບໍ່ລະບຸ'}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => handleSendSinglePush(tok)}
+                      disabled={testPushLoading}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center gap-1.5 transition disabled:opacity-50"
+                    >
+                      <Send className="w-3 h-3 text-emerald-400" />
+                      <span>ທົດສອບສົ່ງຫາເຄື່ອງນີ້</span>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
 
             {/* Push History Logs Table */}
             <div className="bg-neutral-900 rounded-2xl border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
