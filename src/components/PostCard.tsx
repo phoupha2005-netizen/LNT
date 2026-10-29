@@ -47,11 +47,11 @@ export const PostCard: React.FC<PostCardProps> = ({
   const isOwner = currentUser?.uid === post.ownerId;
   const canManage = isOwner || isAdmin;
 
-  // Format fee label
-  const feeTypeObj = FEE_TYPES.find(f => f.value === post.feeType);
+  // Format fee label and split badge
+  const feeTypeObj = FEE_TYPES.find(f => f.value === post.feeType) || FEE_TYPES[0];
   const feeLabel = post.pitchFee 
-    ? `${post.pitchFee} (${feeTypeObj?.label || 'ແບ່ງຈ່າຍ'})` 
-    : feeTypeObj?.label || 'ຫານເຄິ່ງກັນ';
+    ? `${post.pitchFee} • ${feeTypeObj.tag}` 
+    : feeTypeObj.label;
 
   // Format skill badge
   const skillObj = SKILL_LEVELS.find(s => s.value === post.skillLevel) || {
@@ -217,10 +217,23 @@ export const PostCard: React.FC<PostCardProps> = ({
 
           <div className="flex items-center space-x-2 truncate">
             <Banknote className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="truncate">{feeLabel}</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="truncate font-medium">{post.pitchFee || 'ຄ່າສະໜາມ'}</span>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${feeTypeObj.bgColor} ${feeTypeObj.color} border ${feeTypeObj.borderColor} shrink-0`}>
+                {feeTypeObj.tag}
+              </span>
+            </div>
           </div>
 
         </div>
+
+        {/* Fee Split Details agreement note if present */}
+        {post.feeSplitDetails && (
+          <div className="mb-3 px-3 py-1.5 rounded-xl bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-300 flex items-center gap-1.5">
+            <span className="font-bold text-amber-400 shrink-0">🤝 ຂໍ້ຕົກລົງຄ່າສະໜາມ:</span>
+            <span className="truncate">{post.feeSplitDetails}</span>
+          </div>
+        )}
 
         {/* Badges row: Skill & Notes snippet */}
         <div className="flex items-center justify-between text-xs gap-2">

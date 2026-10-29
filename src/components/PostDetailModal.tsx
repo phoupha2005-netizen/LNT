@@ -78,7 +78,7 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   if (!isOpen || !post) return null;
 
   const skillObj = SKILL_LEVELS.find(s => s.value === post.skillLevel);
-  const feeTypeObj = FEE_TYPES.find(f => f.value === post.feeType);
+  const feeTypeObj = FEE_TYPES.find(f => f.value === post.feeType) || FEE_TYPES[0];
 
   const cleanPhone = (post.contactWhatsapp || post.contactPhone || '').replace(/[^0-9]/g, '');
   const waPhone = cleanPhone.startsWith('856') 
@@ -337,17 +337,35 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center space-x-3 text-neutral-300 sm:col-span-2">
-              <div className="w-9 h-9 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
-                <Banknote className="w-4 h-4" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-neutral-300 sm:col-span-2 p-3 bg-neutral-900/80 rounded-xl border border-neutral-800">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                  <Banknote className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-neutral-400">ຄ່າສະໜາມ & ວິທີແບ່ງຈ່າຍ</p>
+                  <p className="font-bold text-white text-base">
+                    {post.pitchFee || 'ບໍ່ໄດ້ລະບຸຄ່າສະໜາມ'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[11px] text-neutral-500">ຄ່າສະໜາມ & ການແບ່ງຈ່າຍ</p>
-                <p className="font-semibold text-white">
-                  {post.pitchFee || 'ບໍ່ໄດ້ລະບຸ'} - {feeTypeObj?.label || 'ຫານເຄິ່ງກັນ'}
-                </p>
+
+              <div className="flex flex-col sm:items-end gap-1">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${feeTypeObj.bgColor} ${feeTypeObj.color} border ${feeTypeObj.borderColor}`}>
+                  {feeTypeObj.badge}
+                </span>
+                <span className="text-[11px] text-neutral-400">
+                  {feeTypeObj.description}
+                </span>
               </div>
             </div>
+
+            {post.feeSplitDetails && (
+              <div className="sm:col-span-2 p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs text-amber-300 flex items-start gap-2">
+                <span className="font-bold text-amber-400 shrink-0 mt-0.5">🤝 ຂໍ້ຕົກລົງຄ່າສະໜາມ:</span>
+                <span className="leading-relaxed">{post.feeSplitDetails}</span>
+              </div>
+            )}
 
           </div>
 

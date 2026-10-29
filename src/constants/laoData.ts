@@ -77,44 +77,111 @@ export const SKILL_LEVELS = [
   { value: "ອາວຸໂສ (35 ປີຂຶ້ນໄປ)", label: "ອາວຸໂສ (Veterans 35+)", color: "text-purple-400 border-purple-800/50 bg-purple-950/40" }
 ];
 
-export const FEE_TYPES = [
-  { value: "split", label: "ຫານເຄິ່ງກັນ (50 / 50)" },
-  { value: "loser_pays", label: "ທີມແພ້ຈ່າຍຄ່າສະໜາມ" },
-  { value: "host_pays", label: "ເຈົ້າພາບຈ່າຍ (ຟຣີສຳລັບຄູ່ແຂ່ງ)" },
-  { value: "custom", label: "ລະບຸຄ່າສະໜາມ / ເງື່ອນໄຂອື່ນໆ" }
+export interface FeeTypeOption {
+  value: 'split' | 'host_pays' | 'loser_pays' | 'per_person' | 'custom';
+  label: string;
+  badge: string;
+  tag: string;
+  description: string;
+  color: string;
+  borderColor: string;
+  bgColor: string;
+}
+
+export const FEE_TYPES: FeeTypeOption[] = [
+  { 
+    value: "split", 
+    label: "ຫານເຄິ່ງກັນ 50/50 (ແບ່ງເທົ່າກັນ 2 ທີມ)",
+    badge: "50/50 ຫານເຄິ່ງ",
+    tag: "ຫານເຄິ່ງ 50/50",
+    description: "ທັງສອງທີມອອກຄ່າສະໜາມຄົນລະເຄິ່ງ ເທົ່າທຽມກັນ",
+    color: "text-emerald-400",
+    borderColor: "border-emerald-500/40",
+    bgColor: "bg-emerald-500/10"
+  },
+  { 
+    value: "host_pays", 
+    label: "ເຈົ້າພາບລ້ຽງ / ຈ່າຍເອງ (ທີມມາເຕະລ້າ/ຟຣີ)",
+    badge: "ເຈົ້າພາບລ້ຽງ (ຟຣີ)",
+    tag: "ເຈົ້າພາບຈ່າຍ (ເຕະຟຣີ)",
+    description: "ທີມເຈົ້າພາບຮັບຜິດຊອບຄ່າສະໜາມທັງໝົດ ທີມມາເຕະບໍ່ເສຍຄ່າສະໜາມ",
+    color: "text-teal-300",
+    borderColor: "border-teal-500/40",
+    bgColor: "bg-teal-500/10"
+  },
+  { 
+    value: "loser_pays", 
+    label: "ທີມແພ້ຈ່າຍຄ່າສະໜາມ (ຫຼື ແພ້ຈ່າຍຫຼາຍກວ່າ)",
+    badge: "ທີມແພ້ຈ່າຍ",
+    tag: "ທີມແພ້ຈ່າຍ",
+    description: "ວາງເດີມພັນຄ່າສະໜາມ ທີມແພ້ຈ່າຍຄ່າສະໜາມເຕັມ ຫຼື ອອກຫຼາຍກວ່າ",
+    color: "text-amber-400",
+    borderColor: "border-amber-500/40",
+    bgColor: "bg-amber-500/10"
+  },
+  { 
+    value: "per_person", 
+    label: "ຫານຕາມຈຳນວນຄົນ (ແບ່ງລາຍບຸກຄົນ)",
+    badge: "ຫານຕາມຫົວຄົນ",
+    tag: "ຫານຕາມຈຳນວນຄົນ",
+    description: "ນັບຈຳນວນນັກເຕະທັງໝົດທີ່ມາລົງສະໜາມ ແລ້ວຫານສະເລ່ຍຕໍ່ຄົນ",
+    color: "text-blue-400",
+    borderColor: "border-blue-500/40",
+    bgColor: "bg-blue-500/10"
+  },
+  { 
+    value: "custom", 
+    label: "ກຳນົດເອງ / ຂໍ້ຕົກລົງພິເສດ",
+    badge: "ກຳນົດເອງ",
+    tag: "ຂໍ້ຕົກລົງພິເສດ",
+    description: "ກຳນົດເງື່ອນໄຂການແບ່ງຄ່າສະໜາມ ຫຼື ຄ່ານ້ຳດື່ມຕາມຕົກລົງ",
+    color: "text-purple-400",
+    borderColor: "border-purple-500/40",
+    bgColor: "bg-purple-500/10"
+  }
 ];
 
-// High quality curated SVG football badges
+// High quality curated SVG/football badges for team logos
 export const PRESET_TEAM_LOGOS = [
   {
     id: "lnt_tigers",
-    name: "LNT Tigers",
-    url: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=150&auto=format&fit=crop&q=80"
+    name: "LNT Tigers (ເສືອໂຄ່ງ)",
+    url: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=200&auto=format&fit=crop&q=80"
   },
   {
     id: "golden_dragon",
-    name: "Golden Dragon FC",
-    url: "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=150&auto=format&fit=crop&q=80"
+    name: "Golden Dragon FC (ມັງກອນຄຳ)",
+    url: "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=200&auto=format&fit=crop&q=80"
   },
   {
     id: "namtha_united",
-    name: "Namtha United",
-    url: "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?w=150&auto=format&fit=crop&q=80"
+    name: "Namtha United (ນ້ຳທາ ຢູນາຍເຕັດ)",
+    url: "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?w=200&auto=format&fit=crop&q=80"
   },
   {
-    id: "red_bulls",
-    name: "Red Warriors",
-    url: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
+    id: "red_warriors",
+    name: "Red Warriors (ນັກຮົບສີແດງ)",
+    url: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=200&auto=format&fit=crop&q=80"
   },
   {
     id: "blue_wolves",
-    name: "Blue Wolves FC",
-    url: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=150&auto=format&fit=crop&q=80"
+    name: "Blue Wolves (ໝາປ່າສີຟ້າ)",
+    url: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=200&auto=format&fit=crop&q=80"
   },
   {
     id: "emerald_stars",
-    name: "Emerald Stars",
-    url: "https://images.unsplash.com/photo-1551958219-acbc608c6377?w=150&auto=format&fit=crop&q=80"
+    name: "Emerald Stars (ດາວມໍລະກົດ)",
+    url: "https://images.unsplash.com/photo-1551958219-acbc608c6377?w=200&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "white_elephants",
+    name: "White Elephants (ຊ້າງເຜືອກ FC)",
+    url: "https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=200&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "lightning_strike",
+    name: "Lightning Strike (ສາຍຟ້າ FC)",
+    url: "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=200&auto=format&fit=crop&q=80"
   }
 ];
 

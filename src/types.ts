@@ -35,7 +35,8 @@ export interface FootballPost {
   district: string;
   skillLevel: string;
   pitchFee: string;
-  feeType: 'split' | 'loser_pays' | 'host_pays' | 'custom';
+  feeType: 'split' | 'loser_pays' | 'host_pays' | 'per_person' | 'custom';
+  feeSplitDetails?: string;
   details?: string;
   contactPhone?: string;
   contactWhatsapp?: string;

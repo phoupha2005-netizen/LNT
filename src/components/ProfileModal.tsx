@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   User, 
@@ -10,7 +10,9 @@ import {
   Check, 
   Copy, 
   Trophy,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LAO_PROVINCES, PRESET_TEAM_LOGOS } from '../constants/laoData';
@@ -50,6 +52,42 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [pushLoading, setPushLoading] = useState(false);
   const [pushStatusMsg, setPushStatusMsg] = useState('');
   const platform = getDevicePlatform();
+  const teamLogoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleTeamLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 200;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > maxDim) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          }
+        } else {
+          if (h > maxDim) {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          setTeamLogo(canvas.toDataURL('image/jpeg', 0.85));
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (userProfile && isOpen) {
@@ -225,19 +263,81 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           </div>
 
-          {/* Team Name */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-300 mb-1 flex items-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5 text-emerald-400" />
-              <span>ຊື່ທີມບານຂອງທ່ານ</span>
-            </label>
+          {/* Team Profile (Name & Logo) */}
+          <div className="p-3.5 bg-neutral-950/70 rounded-2xl border border-neutral-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-neutral-200 flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-emerald-400" />
+                <span>ຂໍ້ມູນສະໂມສອນ / ທີມບານ (Team Profile)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => teamLogoInputRef.current?.click()}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
+              >
+                <Upload className="w-3 h-3" />
+                <span>ອັບໂຫຼດໂລໂກ້</span>
+              </button>
+            </div>
+
             <input
-              type="text"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="ເຊັ່ນ: ທີມນ້ຳທາ ຢູນາຍເຕັດ"
-              className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+              type="file"
+              ref={teamLogoInputRef}
+              accept="image/*"
+              onChange={handleTeamLogoUpload}
+              className="hidden"
             />
+
+            <div className="flex items-center space-x-3">
+              <div className="relative w-12 h-12 rounded-xl bg-neutral-900 border border-neutral-700 p-0.5 overflow-hidden shrink-0 shadow">
+                <img
+                  src={teamLogo || PRESET_TEAM_LOGOS[0].url}
+                  alt="Team Logo"
+                  className="w-full h-full object-cover rounded-lg"
+                />
+                {teamLogo && (
+                  <button
+                    type="button"
+                    onClick={() => setTeamLogo('')}
+                    title="ລຶບຮູບໂລໂກ້"
+                    className="absolute inset-0 bg-black/60 text-red-400 opacity-0 hover:opacity-100 flex items-center justify-center transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  placeholder="ຊື່ສະໂມສອນ ຫຼື ທີມບານ"
+                  className="w-full bg-neutral-900 border border-neutral-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Quick preset selector */}
+            <div className="pt-1">
+              <span className="text-[10px] text-neutral-400 block mb-1.5">ເລືອກໂລໂກ້ທີມແນະນຳ (Preset):</span>
+              <div className="grid grid-cols-8 gap-1.5">
+                {PRESET_TEAM_LOGOS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setTeamLogo(item.url)}
+                    className={`aspect-square rounded-lg p-0.5 border overflow-hidden transition relative ${
+                      teamLogo === item.url
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/50 bg-emerald-500/10'
+                        : 'border-neutral-800 hover:border-neutral-700 opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={item.url} alt={item.name} className="w-full h-full object-cover rounded-md" />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Province & District */}
