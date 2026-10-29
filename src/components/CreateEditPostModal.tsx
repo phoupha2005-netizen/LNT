@@ -23,7 +23,7 @@ import {
   PRESET_TEAM_LOGOS, 
   POPULAR_PITCHES_LNT 
 } from '../constants/laoData';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 
 interface CreateEditPostModalProps {
@@ -194,11 +194,32 @@ export const CreateEditPostModal: React.FC<CreateEditPostModalProps> = ({
         const docRef = await addDoc(collection(db, 'posts'), newPost);
 
         // Trigger Server Push Notification via Firebase Admin SDK
-        fetch('/api/send-post-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postId: docRef.id })
-        }).catch(err => console.warn('Background push notification trigger:', err));
+        try {
+          const tokensSnap = await getDocs(query(collection(db, 'fcmTokens'), where('enabled', '==', true)));
+          const targetTokens: string[] = [];
+          tokensSnap.forEach((tDoc) => {
+            const tData = tDoc.data();
+            if (tData.userId !== currentUser.uid && tData.token) {
+              targetTokens.push(tData.token);
+            }
+          });
+
+          fetch('/api/send-post-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              postId: docRef.id,
+              postData: newPost,
+              tokens: targetTokens
+            })
+          }).catch(err => console.warn('Background push notification trigger:', err));
+        } catch (pushErr) {
+          fetch('/api/send-post-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId: docRef.id })
+          }).catch(err => console.warn('Background push notification trigger:', err));
+        }
 
         onSuccess({ id: docRef.id, ...newPost });
         onClose();
