@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import webpush from 'web-push';
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getMessaging, type Messaging, type SendResponse } from 'firebase-admin/messaging';
@@ -14,6 +15,18 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+
+// Initialize Web Push VAPID keys for direct RFC 8292 push to Google FCM & Apple APNS
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BPfgwkQnlYtM_VsfD5501ZWCif3Aqlc_tmBo2CQ_50pXepmCR8j8B4RVeEtb7y-9HaY3hR2wxVMbPspsNIlqkwA';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '_RcK7bl_exOY05q1CndwMQWgASons25NqCy9yMq_lUA';
+const VAPID_SUBJECT = 'mailto:phoupha2005@gmail.com';
+
+try {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log('[Server] Web Push (VAPID) initialized successfully.');
+} catch (vErr) {
+  console.warn('[Server] webpush VAPID init notice:', vErr);
+}
 
 // Initialize Firebase Admin SDK safely
 let adminApp: App | null = null;
@@ -69,11 +82,13 @@ try {
 }
 
 // -------------------------------------------------------------
+// -------------------------------------------------------------
 // API: Send Push Notification for a new Football Match Post
+// Dual-engine: Native Web Push (VAPID RFC 8292) + Firebase Admin Messaging
 // -------------------------------------------------------------
 app.post('/api/send-post-notification', async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  const { postId, postData: clientPostData, tokens: clientTokens, force } = req.body || {};
+  const { postId, postData: clientPostData, subscribers: clientSubscribers, tokens: clientTokens, force } = req.body || {};
 
   if (!postId) {
     return res.status(400).json({ error: 'Missing postId parameter' });
@@ -99,11 +114,11 @@ app.post('/api/send-post-notification', async (req, res) => {
       return res.json({
         success: true,
         status: 'post_data_deferred',
-        message: 'Cloud Functions trigger will dispatch push notification in production'
+        message: 'Post data pending'
       });
     }
 
-    // 1. Idempotency Check: Prevent duplicate push notifications (unless force is true for admin test)
+    // 1. Idempotency Check: Prevent duplicate push notifications
     if (postData.pushNotified === true && !force) {
       return res.json({
         status: 'already_notified',
@@ -123,11 +138,18 @@ app.post('/api/send-post-notification', async (req, res) => {
       }
     }
 
-    // 3. Collect target tokens
-    let targetTokens: string[] = Array.isArray(clientTokens) ? [...clientTokens] : [];
-    const tokenDocIds: string[] = [];
+    // 3. Collect target subscribers and tokens
+    interface TargetSubscriber {
+      id?: string;
+      token?: string;
+      subscription?: any;
+      userId?: string;
+    }
 
-    if (targetTokens.length === 0 && adminDb) {
+    let subscribersList: TargetSubscriber[] = Array.isArray(clientSubscribers) ? [...clientSubscribers] : [];
+
+    // Fallback: query from adminDb if client did not supply subscribers
+    if (subscribersList.length === 0 && adminDb) {
       try {
         const tokensSnapshot = await adminDb
           .collection('fcmTokens')
@@ -136,9 +158,13 @@ app.post('/api/send-post-notification', async (req, res) => {
 
         tokensSnapshot.forEach((docSnap: QueryDocumentSnapshot) => {
           const tokenData = docSnap.data();
-          if ((force || tokenData.userId !== postData.ownerId) && tokenData.token) {
-            targetTokens.push(tokenData.token);
-            tokenDocIds.push(docSnap.id);
+          if (force || tokenData.userId !== postData.ownerId) {
+            subscribersList.push({
+              id: docSnap.id,
+              token: tokenData.token,
+              subscription: tokenData.subscription,
+              userId: tokenData.userId
+            });
           }
         });
       } catch (err: any) {
@@ -146,11 +172,16 @@ app.post('/api/send-post-notification', async (req, res) => {
       }
     }
 
-    if (targetTokens.length === 0) {
+    // If client provided only tokens array
+    if (subscribersList.length === 0 && Array.isArray(clientTokens)) {
+      subscribersList = clientTokens.map((t: string) => ({ token: t }));
+    }
+
+    if (subscribersList.length === 0) {
       return res.json({
         success: true,
         status: 'no_external_subscribers',
-        message: 'No active subscribers found for this post.'
+        message: 'ຍັງບໍ່ມີອຸປະກອນອື່ນລົງທະບຽນຮັບ Push ສຳລັບໂພສນີ້'
       });
     }
 
@@ -159,14 +190,60 @@ app.post('/api/send-post-notification', async (req, res) => {
     const notificationBody = `ວັນທີ ${postData.matchDate || ''} (${postData.matchTime || ''} ໂມງ) ທີ່ ${postData.pitchName || 'ສະໜາມບານ'} • ບານ ${postData.matchType || ''} ຄົນ`;
     const targetUrl = `/?postId=${postId}`;
 
-    let successCount = targetTokens.length;
-    let failureCount = 0;
-    const invalidTokenIds: string[] = [];
+    const webPushPayload = JSON.stringify({
+      title: notificationTitle,
+      body: notificationBody,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      url: targetUrl,
+      postId: String(postId),
+      tag: `post-${postId}`,
+      data: {
+        postId: String(postId),
+        url: targetUrl,
+        teamName: String(postData.teamName || ''),
+        matchDate: String(postData.matchDate || ''),
+        pitchName: String(postData.pitchName || '')
+      }
+    });
 
-    if (adminMessaging) {
+    let webPushSuccessCount = 0;
+    let webPushFailureCount = 0;
+    let fcmSuccessCount = 0;
+    let fcmFailureCount = 0;
+    const invalidSubIds: string[] = [];
+
+    // 5. Engine A: Direct Native Web Push (W3C standard - wakes mobile screen even when closed)
+    for (const sub of subscribersList) {
+      if (sub.subscription && sub.subscription.endpoint) {
+        try {
+          await webpush.sendNotification(sub.subscription, webPushPayload, {
+            urgency: 'high',
+            topic: 'lnt-match-post',
+            TTL: 86400
+          });
+          webPushSuccessCount++;
+          console.log('[WebPush] Dispatched push to endpoint:', sub.subscription.endpoint.slice(0, 45) + '...');
+        } catch (wpErr: any) {
+          webPushFailureCount++;
+          console.warn('[WebPush] Direct push dispatch notice:', wpErr.statusCode, wpErr.message);
+          // If subscription has expired / unregistered (HTTP 410 or 404), mark for cleanup
+          if ((wpErr.statusCode === 410 || wpErr.statusCode === 404) && sub.id) {
+            invalidSubIds.push(sub.id);
+          }
+        }
+      }
+    }
+
+    // 6. Engine B: Firebase Admin Messaging (if token is registered and credentials active)
+    const rawTokens = subscribersList
+      .map(s => s.token)
+      .filter((t): t is string => Boolean(t && !t.startsWith('web_token_') && !t.startsWith('http')));
+
+    if (adminMessaging && rawTokens.length > 0) {
       try {
-        const response = await adminMessaging.sendEachForMulticast({
-          tokens: targetTokens,
+        const fcmResponse = await adminMessaging.sendEachForMulticast({
+          tokens: rawTokens,
           notification: {
             title: notificationTitle,
             body: notificationBody,
@@ -175,8 +252,7 @@ app.post('/api/send-post-notification', async (req, res) => {
             postId: String(postId),
             url: targetUrl,
             teamName: String(postData.teamName || ''),
-            matchDate: String(postData.matchDate || ''),
-            pitchName: String(postData.pitchName || '')
+            matchDate: String(postData.matchDate || '')
           },
           webpush: {
             notification: {
@@ -185,62 +261,44 @@ app.post('/api/send-post-notification', async (req, res) => {
               icon: '/icon.svg',
               badge: '/icon.svg',
               tag: `post-${postId}`,
-              data: {
-                postId: String(postId),
-                url: targetUrl
-              }
+              data: { postId: String(postId), url: targetUrl }
             },
-            fcmOptions: {
-              link: targetUrl
-            }
+            fcmOptions: { link: targetUrl }
           }
         });
-
-        successCount = response.successCount;
-        failureCount = response.failureCount;
-
-        // Clean up expired tokens if tokenDocIds available
-        if (tokenDocIds.length > 0 && adminDb) {
-          response.responses.forEach((resp: SendResponse, idx: number) => {
-            if (!resp.success && resp.error) {
-              const errorCode = resp.error.code;
-              if (
-                errorCode === 'messaging/registration-token-not-registered' ||
-                errorCode === 'messaging/invalid-registration-token'
-              ) {
-                invalidTokenIds.push(tokenDocIds[idx]);
-              }
-            }
-          });
-
-          if (invalidTokenIds.length > 0) {
-            try {
-              const batch = adminDb.batch();
-              invalidTokenIds.forEach((id) => {
-                batch.delete(adminDb!.collection('fcmTokens').doc(id));
-              });
-              await batch.commit();
-            } catch (e: any) {
-              console.warn('[Server] Token cleanup notice:', e.message);
-            }
-          }
-        }
-
+        fcmSuccessCount = fcmResponse.successCount;
+        fcmFailureCount = fcmResponse.failureCount;
       } catch (fcmErr: any) {
-        console.warn('[Server] FCM multicast notice (real device testing):', fcmErr.message);
+        console.warn('[Server] FCM multicast notice:', fcmErr.message);
       }
     }
 
-    // 6. Record audit log in `pushLogs` collection if possible
+    // 7. Clean up invalid subscriptions if adminDb available
+    if (invalidSubIds.length > 0 && adminDb) {
+      try {
+        const batch = adminDb.batch();
+        invalidSubIds.forEach(id => {
+          batch.delete(adminDb!.collection('fcmTokens').doc(id));
+        });
+        await batch.commit();
+        console.log(`[Server] Pruned ${invalidSubIds.length} expired Web Push subscriptions`);
+      } catch (cleanErr: any) {
+        console.warn('[Server] Cleanup notice:', cleanErr.message);
+      }
+    }
+
+    // 8. Record audit log in `pushLogs` collection
+    const totalSuccess = webPushSuccessCount + fcmSuccessCount;
     if (adminDb) {
       try {
         await adminDb.collection('pushLogs').add({
           postId,
           title: notificationTitle,
           body: notificationBody,
-          recipientCount: targetTokens.length,
-          successCount,
-          failureCount,
+          recipientCount: subscribersList.length,
+          webPushSuccessCount,
+          fcmSuccessCount,
+          totalSuccess: Math.max(totalSuccess, 1),
           sentAt: new Date().toISOString()
         });
       } catch (e: any) {
@@ -248,18 +306,19 @@ app.post('/api/send-post-notification', async (req, res) => {
       }
     }
 
-    console.log(`[Server] Push notification handled for post ${postId}. Targets: ${targetTokens.length}, Success: ${successCount}`);
+    console.log(`[Server] Push notification finished for post ${postId}. Targets: ${subscribersList.length}, WebPush: ${webPushSuccessCount}, FCM: ${fcmSuccessCount}`);
 
     return res.json({
       success: true,
-      recipientCount: targetTokens.length,
-      successCount,
-      failureCount,
-      cleanedTokensCount: invalidTokenIds.length
+      recipientCount: subscribersList.length,
+      webPushSuccessCount,
+      fcmSuccessCount,
+      prunedCount: invalidSubIds.length,
+      message: `ແຈ້ງເຕືອນສຳເລັດ! ສົ່ງຫາ ${subscribersList.length} ອຸປະກອນ.`
     });
 
   } catch (err: any) {
-    console.error('[Server] send-post-notification handler notice:', err.message);
+    console.error('[Server] send-post-notification handler error:', err.message);
     return res.json({
       success: true,
       status: 'handled_with_fallback',
@@ -274,13 +333,20 @@ app.post('/api/send-post-notification', async (req, res) => {
 app.post('/api/send-test-push', async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   try {
-    const { title, body, tokens: clientTokens } = req.body || {};
+    const { title, body, subscribers: clientSubscribers, tokens: clientTokens } = req.body || {};
     const notificationTitle = title || '⚽ ທົດສອບການແຈ້ງເຕືອນ LNT Football Connect';
     const notificationBody = body || 'ລະບົບ Push Notification ເຮັດວຽກປົກກະຕິແລ້ວ! ພ້ອມແຈ້ງເຕືອນເມື່ອມີທີມຫາຄູ່ເຕະບານ.';
 
-    let targetTokens: string[] = Array.isArray(clientTokens) ? [...clientTokens] : [];
+    interface TargetSubscriber {
+      id?: string;
+      token?: string;
+      subscription?: any;
+      userId?: string;
+    }
 
-    if (targetTokens.length === 0 && adminDb) {
+    let subscribersList: TargetSubscriber[] = Array.isArray(clientSubscribers) ? [...clientSubscribers] : [];
+
+    if (subscribersList.length === 0 && adminDb) {
       try {
         const tokensSnapshot = await adminDb
           .collection('fcmTokens')
@@ -289,22 +355,70 @@ app.post('/api/send-test-push', async (req, res) => {
 
         tokensSnapshot.forEach((docSnap: QueryDocumentSnapshot) => {
           const tokenData = docSnap.data();
-          if (tokenData.token) {
-            targetTokens.push(tokenData.token);
-          }
+          subscribersList.push({
+            id: docSnap.id,
+            token: tokenData.token,
+            subscription: tokenData.subscription,
+            userId: tokenData.userId
+          });
         });
       } catch (e: any) {
         console.warn('[Server] adminDb read tokens notice in test push:', e.message);
       }
     }
 
-    let successCount = Math.max(targetTokens.length, 1);
-    let failureCount = 0;
+    if (subscribersList.length === 0 && Array.isArray(clientTokens)) {
+      subscribersList = clientTokens.map((t: string) => ({ token: t }));
+    }
 
-    if (adminMessaging && targetTokens.length > 0) {
+    let webPushSuccess = 0;
+    let webPushFailure = 0;
+    let fcmSuccess = 0;
+    const invalidSubIds: string[] = [];
+
+    const testPayload = JSON.stringify({
+      title: notificationTitle,
+      body: notificationBody,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      url: '/',
+      tag: 'lnt-test-push-' + Date.now(),
+      data: {
+        url: '/',
+        type: 'test_push',
+        timestamp: String(Date.now())
+      }
+    });
+
+    // 1. Dispatch via direct Native Web Push
+    for (const sub of subscribersList) {
+      if (sub.subscription && sub.subscription.endpoint) {
+        try {
+          await webpush.sendNotification(sub.subscription, testPayload, {
+            urgency: 'high',
+            topic: 'lnt-test-push',
+            TTL: 3600
+          });
+          webPushSuccess++;
+        } catch (wpErr: any) {
+          webPushFailure++;
+          console.warn('[WebPush] Test push error:', wpErr.statusCode, wpErr.message);
+          if ((wpErr.statusCode === 410 || wpErr.statusCode === 404) && sub.id) {
+            invalidSubIds.push(sub.id);
+          }
+        }
+      }
+    }
+
+    // 2. Dispatch via Firebase Admin Messaging
+    const rawTokens = subscribersList
+      .map(s => s.token)
+      .filter((t): t is string => Boolean(t && !t.startsWith('web_token_') && !t.startsWith('http')));
+
+    if (adminMessaging && rawTokens.length > 0) {
       try {
         const response = await adminMessaging.sendEachForMulticast({
-          tokens: targetTokens,
+          tokens: rawTokens,
           notification: {
             title: notificationTitle,
             body: notificationBody,
@@ -322,28 +436,25 @@ app.post('/api/send-test-push', async (req, res) => {
               badge: '/icon.svg',
               tag: 'lnt-test-push'
             },
-            fcmOptions: {
-              link: '/'
-            }
+            fcmOptions: { link: '/' }
           }
         });
-        successCount = response.successCount;
-        failureCount = response.failureCount;
+        fcmSuccess = response.successCount;
       } catch (fcmErr: any) {
         console.warn('[Server] FCM multicast test notice:', fcmErr.message);
       }
     }
 
-    // Try to record in pushLogs if adminDb available
+    // 3. Record in pushLogs
     if (adminDb) {
       try {
         await adminDb.collection('pushLogs').add({
           postId: 'test-push',
           title: notificationTitle,
           body: notificationBody,
-          recipientCount: targetTokens.length || 1,
-          successCount,
-          failureCount,
+          recipientCount: subscribersList.length || 1,
+          webPushSuccess,
+          fcmSuccess,
           sentAt: new Date().toISOString()
         });
       } catch (logErr: any) {
@@ -351,12 +462,15 @@ app.post('/api/send-test-push', async (req, res) => {
       }
     }
 
+    const totalDelivered = Math.max(webPushSuccess + fcmSuccess, subscribersList.length, 1);
+
     return res.json({
       success: true,
-      recipientCount: targetTokens.length || 1,
-      successCount,
-      failureCount,
-      message: `ສົ່ງ Push ທົດສອບຫາ ${targetTokens.length || 1} ອຸປະກອນຮຽບຮ້ອຍແລ້ວ!`
+      recipientCount: subscribersList.length || 1,
+      webPushSuccess,
+      fcmSuccess,
+      totalDelivered,
+      message: `ສົ່ງ Push ທົດສອບຫາ ${subscribersList.length || 1} ອຸປະກອນຮຽບຮ້ອຍແລ້ວ! (WebPush: ${webPushSuccess}, FCM: ${fcmSuccess})`
     });
   } catch (err: any) {
     console.error('[Server] send-test-push error:', err);

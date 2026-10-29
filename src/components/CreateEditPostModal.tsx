@@ -197,12 +197,19 @@ export const CreateEditPostModal: React.FC<CreateEditPostModalProps> = ({
         try {
           const tokensSnap = await getDocs(query(collection(db, 'fcmTokens'), where('enabled', '==', true)));
           const targetTokens: string[] = [];
+          const targetSubscribers: any[] = [];
           const targetUserIds = new Set<string>();
 
           tokensSnap.forEach((tDoc) => {
             const tData = tDoc.data();
             if (tData.userId && tData.userId !== currentUser.uid) {
               targetUserIds.add(tData.userId);
+              targetSubscribers.push({
+                id: tDoc.id,
+                token: tData.token,
+                subscription: tData.subscription,
+                userId: tData.userId
+              });
               if (tData.token) {
                 targetTokens.push(tData.token);
               }
@@ -232,13 +239,14 @@ export const CreateEditPostModal: React.FC<CreateEditPostModalProps> = ({
             }).catch(e => console.warn('In-app notification dispatch notice:', e));
           });
 
-          // Trigger Server Push Notification via Firebase Admin SDK
+          // Trigger Server Push Notification via Web Push (RFC 8292) and Firebase Admin SDK
           fetch('/api/send-post-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               postId: docRef.id,
               postData: newPost,
+              subscribers: targetSubscribers,
               tokens: targetTokens
             })
           }).catch(err => console.warn('Background push notification trigger:', err));

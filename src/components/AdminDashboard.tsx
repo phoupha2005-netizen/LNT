@@ -246,7 +246,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }
       }
 
-      // 2. Call server-side FCM dispatch endpoint safely
+      // 2. Call server-side FCM / Web Push dispatch endpoint safely
       let serverSuccess = false;
       let recipientCount = Math.max(fcmTokensList.length, fcmTokensCount, 1);
       let successCount = recipientCount;
@@ -258,6 +258,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           body: JSON.stringify({
             title: '⚽ ທົດສອບການແຈ້ງເຕືອນ LNT Football Connect',
             body: 'ລະບົບ Push Notification ເຮັດວຽກປົກກະຕິແລ້ວ! ພ້ອມແຈ້ງເຕືອນເມື່ອມີທີມຫາຄູ່ເຕະບານ.',
+            subscribers: fcmTokensDocs,
             tokens: fcmTokensList
           })
         });
@@ -273,7 +274,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (res.ok && data?.success) {
           serverSuccess = true;
           recipientCount = data.recipientCount || recipientCount;
-          successCount = data.successCount || successCount;
+          successCount = data.totalDelivered || data.successCount || successCount;
         }
       } catch (fetchErr) {
         console.warn('Server push endpoint fetch notice:', fetchErr);
@@ -319,6 +320,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         body: JSON.stringify({
           title: '⚽ ທົດສອບ Push ເທິງອຸປະກອນນີ້',
           body: `ທົດສອບສົ່ງ Push ຫາ ${tokenItem.userEmail || tokenItem.deviceType || 'ໂທລະສັບ'} ຮຽບຮ້ອຍແລ້ວ!`,
+          subscribers: [tokenItem],
           tokens: [tokenItem.token]
         })
       });
@@ -326,7 +328,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       let data: any = null;
       try { data = JSON.parse(raw); } catch {}
       if (res.ok && data?.success) {
-        setTestPushResult(`✅ ສົ່ງ Push ທົດສອບຫາອຸປະກອນ (${tokenItem.deviceType || 'mobile'}) ສຳເລັດແລ້ວ!`);
+        setTestPushResult(`✅ ສົ່ງ Push ທົດສອບຫາອຸປະກອນ (${tokenItem.deviceType || 'mobile'}) ສຳເລັດແລ້ວ! (WebPush: ${data.webPushSuccess || 0})`);
       } else {
         setTestPushResult(`⚠️ ສົ່ງແລ້ວ (Result: ${data?.message || 'Done'})`);
       }
@@ -919,6 +921,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {tok.userId === currentUser?.uid && (
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-400">
                             ອຸປະກອນຂອງທ່ານ (ເຄື່ອງນີ້)
+                          </span>
+                        )}
+                        {tok.subscription?.endpoint && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            🔒 Lockscreen Push
                           </span>
                         )}
                       </div>

@@ -160,6 +160,13 @@ export interface SystemSetting {
 export interface FcmToken {
   id?: string;
   token: string;
+  subscription?: {
+    endpoint: string;
+    keys: {
+      p256dh: string;
+      auth: string;
+    };
+  };
   userId: string;
   userEmail?: string;
   deviceType?: 'mobile' | 'desktop' | 'ios' | 'android' | 'pwa' | 'unknown';

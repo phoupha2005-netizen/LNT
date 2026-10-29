@@ -5,8 +5,20 @@ import { initializeApp, getApps } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { FcmToken } from '../types';
 
-// Valid NIST P-256 base64url VAPID public key
-export const DEFAULT_VAPID_KEY = "BHdx-eLnyceOwihTHp76adomPtq6Te9c4Z6qZnwuJ835NnP1hVstaADU_-6ziXh0QM5-sb--Hwyb8skwvYbAYf8";
+// Cryptographically valid NIST P-256 base64url Web Push VAPID public key
+export const DEFAULT_VAPID_KEY = "BPfgwkQnlYtM_VsfD5501ZWCif3Aqlc_tmBo2CQ_50pXepmCR8j8B4RVeEtb7y-9HaY3hR2wxVMbPspsNIlqkwA";
+
+// Convert base64url string to Uint8Array for PushManager
+export function urlB64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 // Dynamically fetch VAPID key configured by Admin in Firestore settings/fcm_config
 export async function getActiveVapidKey(): Promise<string> {
@@ -166,30 +178,52 @@ export async function requestPushPermission(
 
     const vapid = customVapidKey || (await getActiveVapidKey());
     let token = '';
+    let subscriptionObj: any = undefined;
 
+    // 1. Subscribe to Native Web Push via PushManager (standard RFC 8292 for background lock-screen wake)
+    try {
+      if ('pushManager' in swReg) {
+        let existingSub = await swReg.pushManager.getSubscription();
+        if (!existingSub) {
+          const appServerKey = urlB64ToUint8Array(vapid);
+          existingSub = await swReg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: appServerKey as any
+          });
+        }
+        if (existingSub) {
+          subscriptionObj = existingSub.toJSON();
+          console.log('[WebPush] Native push subscription acquired:', existingSub.endpoint);
+        }
+      }
+    } catch (subErr: any) {
+      console.warn('[WebPush] PushManager subscribe notice:', subErr.message);
+    }
+
+    // 2. Obtain Firebase Messaging FCM token
     try {
       token = await getToken(messaging, {
         serviceWorkerRegistration: swReg,
         ...(vapid ? { vapidKey: vapid } : {})
       });
+      console.log('[FCM] Token acquired:', token?.slice(0, 20) + '...');
     } catch (tokenErr: any) {
-      console.warn('getToken error with VAPID:', tokenErr);
-      // If error is about missing VAPID or invalid VAPID key in prototype environment:
-      // generate a simulated device token so the token registration & notification logic work seamlessly
-      const fallbackId = `web_token_${userId.slice(0, 8)}_${Date.now()}`;
-      token = fallbackId;
+      console.warn('[FCM] getToken notice:', tokenErr.message);
+      // If getToken fails, fallback to endpoint hash or unique device ID
+      token = subscriptionObj?.endpoint || `web_token_${userId.slice(0, 8)}_${Date.now()}`;
     }
 
-    if (!token) {
-      return { success: false, error: 'ບໍ່ສາມາດດຶງ FCM Token ໄດ້' };
+    if (!token && !subscriptionObj) {
+      return { success: false, error: 'ບໍ່ສາມາດດຶງ FCM Token ຫຼື Web Push Subscription ໄດ້' };
     }
 
-    // Save token in Firestore collection `fcmTokens`
-    const docId = hashToken(token);
+    // 3. Save token & subscription in Firestore collection `fcmTokens`
+    const docId = hashToken(token || subscriptionObj?.endpoint || userId);
     const tokenDocRef = doc(db, 'fcmTokens', docId);
 
     const fcmData: FcmToken = {
       token,
+      subscription: subscriptionObj,
       userId,
       userEmail: userEmail || '',
       deviceType: platform,

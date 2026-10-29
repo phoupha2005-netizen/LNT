@@ -37,24 +37,28 @@ messaging.onBackgroundMessage((payload) => {
 
 // Standard Web Push Event Handler (for native background push on Android & iOS PWA)
 self.addEventListener('push', (event) => {
-  console.log('[SW] Push event received');
+  console.log('[SW] Background push event received');
   if (!event.data) return;
 
   try {
     const payload = event.data.json();
-    const title = payload.notification?.title || payload.data?.title || '⚽ LNT Football Connect';
-    const body = payload.notification?.body || payload.data?.body || 'ມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່!';
-    const postId = payload.data?.postId || null;
-    const url = payload.data?.url || (postId ? `/?postId=${postId}` : '/');
+    const title = payload.title || payload.notification?.title || payload.data?.title || '⚽ LNT Football Connect';
+    const body = payload.body || payload.notification?.body || payload.data?.body || 'ມີທີມໂພສຫາຄູ່ເຕະບານໃໝ່!';
+    const postId = payload.postId || payload.data?.postId || null;
+    const url = payload.url || payload.data?.url || (postId ? `/?postId=${postId}` : '/');
 
     const options = {
       body,
-      icon: payload.notification?.icon || '/icon.svg',
+      icon: payload.icon || payload.notification?.icon || '/icon.svg',
       badge: '/icon.svg',
-      tag: postId ? `post-${postId}` : 'lnt-football-post',
+      tag: postId ? `post-${postId}` : 'lnt-football-post-' + Date.now(),
       renotify: true,
+      requireInteraction: true,
       data: { url, postId },
-      vibrate: [200, 100, 200]
+      vibrate: [300, 100, 300, 100, 300],
+      actions: [
+        { action: 'open', title: 'ເປີດເບິ່ງລາຍລະອຽດ' }
+      ]
     };
 
     event.waitUntil(self.registration.showNotification(title, options));
@@ -65,7 +69,10 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification('⚽ LNT Football Connect', {
         body: text || 'ມີການແຈ້ງເຕືອນຫາຄູ່ເຕະບານໃໝ່!',
         icon: '/icon.svg',
-        badge: '/icon.svg'
+        badge: '/icon.svg',
+        requireInteraction: true,
+        data: { url: '/' },
+        vibrate: [300, 100, 300]
       })
     );
   }
